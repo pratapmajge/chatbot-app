@@ -1,0 +1,202 @@
+{
+  "name": "Chatbot AI Integration",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "webhook/send-message",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "chatbot-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract data from webhook\nconst { chat_id, content } = $input.first().json.input;\nconst userHeaders = $input.first().headers;\n\n// Validate required fields\nif (!chat_id || !content) {\n  throw new Error('Missing required fields: chat_id and content');\n}\n\n// Extract user info from JWT headers\nconst userId = userHeaders['x-hasura-user-id'];\nconst userRole = userHeaders['x-hasura-role'];\nconst authToken = userHeaders['authorization'];\n\n// Validate user authentication\nif (!userId || userRole !== 'user' || !authToken) {\n  throw new Error('Unauthorized: Invalid user credentials');\n}\n\nreturn {\n  chat_id,\n  content,\n  user_id: userId,\n  auth_token: authToken.replace('Bearer ', '')\n};"
+      },
+      "id": "validate-input",
+      "name": "Validate Input & Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.OPENROUTER_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "openai/gpt-3.5-turbo"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"{{$json.content}}\"}]"
+            },
+            {
+              "name": "max_tokens",
+              "value": "500"
+            },
+            {
+              "name": "temperature",
+              "value": "0.7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "openrouter-api",
+      "name": "Call OpenRouter API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract AI response\nconst aiResponse = $input.first().json.choices[0].message.content;\nconst { chat_id, content: userMessage, user_id, auth_token } = $('Validate Input & Auth').first().json;\n\n// Prepare data for database update\nreturn {\n  chat_id,\n  user_message: userMessage,\n  ai_response: aiResponse,\n  user_id,\n  auth_token\n};"
+      },
+      "id": "process-response",
+      "name": "Process AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "{{$env.NHOST_GRAPHQL_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$json.auth_token}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-hasura-admin-secret",
+              "value": "{{$env.NHOST_ADMIN_SECRET}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "mutation InsertMessages($chat_id: uuid!, $user_content: String!, $ai_content: String!) { insert_messages(objects: [{ chat_id: $chat_id, role: \"user\", content: $user_content }, { chat_id: $chat_id, role: \"assistant\", content: $ai_content }]) { affected_rows } }"
+            },
+            {
+              "name": "variables",
+              "value": "={\"chat_id\": \"{{$json.chat_id}}\", \"user_content\": \"{{$json.user_message}}\", \"ai_content\": \"{{$json.ai_response}}\"}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-database",
+      "name": "Update Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"reply\": \"{{$('Process AI Response').first().json.ai_response}}\"}"
+      },
+      "id": "response-node",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input & Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input & Auth": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter API": {
+      "main": [
+        [
+          {
+            "node": "Process AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process AI Response": {
+      "main": [
+        [
+          {
+            "node": "Update Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Database": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+} 

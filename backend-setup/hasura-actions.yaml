@@ -1,0 +1,57 @@
+# Hasura Actions Configuration
+
+## sendMessage Action
+
+### Action Definition
+```yaml
+actions:
+  - name: sendMessage
+    definition:
+      kind: synchronous
+      handler: "{{NHOST_WEBHOOK_URL}}/webhook/send-message"
+      forward_client_headers: true
+      headers:
+        - name: "x-hasura-admin-secret"
+          value: "{{NHOST_ADMIN_SECRET}}"
+    permissions:
+      - role: user
+```
+
+### Action Types
+```graphql
+# Input type for sendMessage action
+input sendMessageInput {
+  chat_id: uuid!
+  content: String!
+}
+
+# Output type for sendMessage action
+type sendMessageOutput {
+  reply: String!
+}
+
+# Action definition
+type Mutation {
+  sendMessage(input: sendMessageInput!): sendMessageOutput!
+}
+```
+
+### Webhook Configuration
+- **URL**: Your n8n webhook endpoint
+- **Method**: POST
+- **Headers**: 
+  - `Authorization`: Bearer token from client
+  - `x-hasura-user-id`: User ID from JWT
+  - `x-hasura-role`: User role from JWT
+
+### Security
+- **Role-based access**: Only `user` role can call this action
+- **Client headers forwarded**: JWT claims are passed to n8n
+- **Admin secret**: Used for n8n to authenticate with Hasura
+
+## Implementation Steps
+1. Create the action in Hasura Console
+2. Set the webhook URL to your n8n endpoint
+3. Enable `forward_client_headers`
+4. Set permissions to allow `user` role
+5. Test with a sample GraphQL mutation 
