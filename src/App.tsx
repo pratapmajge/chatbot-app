@@ -16,7 +16,7 @@ function App() {
 
 	if (!isAuthenticated) return <AuthForm />
 
-	return (
+  return (
 		<div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
 			<header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #e5e7eb' }}>
 				<div style={{ fontWeight: 700 }}>Chatbot</div>
@@ -28,9 +28,9 @@ function App() {
 			<div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
 				<ChatList selectedChatId={selectedChatId} onSelect={setSelectedChatId} />
 				<ChatView chatId={selectedChatId} />
-			</div>
-		</div>
-	)
+      </div>
+      </div>
+  )
 }
 
 export default App

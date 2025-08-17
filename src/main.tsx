@@ -11,7 +11,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <NhostProvider nhost={nhost}>
       <ApolloProvider client={apollo}>
-        <App />
+    <App />
       </ApolloProvider>
     </NhostProvider>
   </React.StrictMode>,
